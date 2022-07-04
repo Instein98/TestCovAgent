@@ -64,7 +64,12 @@ public class CoverageCollector {
         log("testStart: " + startingTest, null);
         currentTestMethodId = startingTest;
         if (covMap.containsKey(currentTestMethodId)) {
-            warn(currentTestMethodId + " is invoked more than once! The coverage of different execution will be merged");
+            warn(currentTestMethodId + " is invoked more than once! Coverage of different execution will be collected separately.");
+            int idx = 1;
+            while (covMap.containsKey(String.format("%s[%d]", startingTest, idx))){
+                idx++;
+            }
+            currentTestMethodId = String.format("%s[%d]", startingTest, idx);
         }
     }
 
