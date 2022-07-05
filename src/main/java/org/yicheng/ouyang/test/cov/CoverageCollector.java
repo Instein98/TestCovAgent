@@ -18,8 +18,8 @@ import java.util.Set;
 
 public class CoverageCollector {
 
-    public static String logPath = "./test-cov.log";
-    public static String outputPath = "./coverage.txt";
+    private static String logPath = "./test-cov.log";
+    private static String outputPath = "./coverage.txt";
 
     // bind each covered line to a unique id for the final output coverage file
     private static int nextLineId = 1;
@@ -30,7 +30,13 @@ public class CoverageCollector {
     private static HashMap<String, Set<Integer>> covMap = new HashMap<>();
 
     // indicate whether it is during the test execution
-    public static String currentTestMethodId;
+    private static String currentTestMethodId;
+
+    static {
+        Thread hook = new Thread(CoverageCollector::outputCoverage);
+        Runtime.getRuntime().addShutdownHook(hook);
+//        log("CoverageCollector: " + System.getProperty("sun.boot.class.path"), null);
+    }
 
     public static synchronized void reportCoverage(String className, String methodName, int lineNum){
         // record coverage only during test execution
@@ -78,7 +84,7 @@ public class CoverageCollector {
         currentTestMethodId = null;
     }
 
-    public static void outputCoverage(){
+    private static void outputCoverage(){
         try(FileWriter fw = new FileWriter(outputPath, true);
             BufferedWriter bw = new BufferedWriter(fw)){
             // print the ids and the covered code elements (statements)
@@ -98,13 +104,13 @@ public class CoverageCollector {
         }
     }
 
-    public static void err(String content){
+    private static void err(String content){
         log(content, "ERROR");
     }
-    public static void warn(String content){
+    private static void warn(String content){
         log(content, "WARNING");
     }
-    public static void log(String content, String level){
+    private static void log(String content, String level){
         try(FileWriter fw = new FileWriter(logPath, true);
             BufferedWriter bw = new BufferedWriter(fw)){
             SimpleDateFormat formatter= new SimpleDateFormat("yy-MM-dd HH:mm:ss");
@@ -115,7 +121,7 @@ public class CoverageCollector {
             t.printStackTrace();
         }
     }
-    public static void logStackTrace(Throwable throwable){
+    private static void logStackTrace(Throwable throwable){
         try(FileOutputStream fos = new FileOutputStream(logPath, true);
                 PrintStream ps = new PrintStream(fos)){
             throwable.printStackTrace(ps);

@@ -5,12 +5,18 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.PrintStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.ProtectionDomain;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Set;
 
 import static org.objectweb.asm.Opcodes.ASM9;
@@ -24,6 +30,8 @@ public class CoverageTransformer implements ClassFileTransformer {
 
     public static int ASM_VERSION = ASM9;
     private static boolean debug = false;
+    private static boolean patchAnt = false;
+    private static String logPath = "./test-cov.log";
 
     Set<String> PREFIX_BLACK_LIST = Sets.newHashSet(
             "org/yicheng/ouyang/test/cov",
@@ -75,10 +83,16 @@ public class CoverageTransformer implements ClassFileTransformer {
         debug = true;
     }
 
+    public static void setPatchAnt(){
+        patchAnt = true;
+    }
+
     @Override
     public byte[] transform(ClassLoader loader, String slashClassName, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
         byte[] result = classfileBuffer;
+//        if (slashClassName.startsWith("org/yicheng/ouyang"))
+            log(String.format("%s is loaded by %s", slashClassName, loader.getClass().getName()), null);
         if (slashClassName == null){
             return result;
         }
@@ -90,6 +104,7 @@ public class CoverageTransformer implements ClassFileTransformer {
                 }
             }
         } else {
+            if (patchAnt) PREFIX_WHITE_LIST.add("org/apache/tools/ant/taskdefs/ExecuteJava");
             boolean matched = false;
             for (String prefix: PREFIX_WHITE_LIST){
                 if (slashClassName.startsWith(prefix)){
@@ -103,17 +118,20 @@ public class CoverageTransformer implements ClassFileTransformer {
         }
 
         try {
-            write(slashClassName + ".class.before", result);
+            if (debug) write(slashClassName + ".class.before", result);
             // Start instrumentation
-//            CoverageCollector.log("Instrumenting " + slashClassName, null);
+//            log("Instrumenting " + slashClassName, null);
             ClassReader cr = new ClassReader(classfileBuffer);
             ClassWriter cw = new ClassWriter(cr, 0);  // use no COMPUTE_FRAME or COMPUTE_MAX
             ClassVisitor cv = new CoverageClassVisitor(cw, slashClassName, loader, getClassVersion(cr));
+            if (patchAnt && slashClassName.equals("org/apache/tools/ant/taskdefs/ExecuteJava")){
+                cv = new AntPatchClassVisitor(cv);
+            }
             cr.accept(cv, 0);
             result = cw.toByteArray();
             if (debug) write(slashClassName + ".class", result);
         } catch (Throwable t){
-            CoverageCollector.logStackTrace(t);
+            logStackTrace(t);
             t.printStackTrace();
         }
         return result;
@@ -139,5 +157,34 @@ public class CoverageTransformer implements ClassFileTransformer {
 
     public static int getClassVersion(ClassReader cr) {
         return cr.readUnsignedShort(6);
+    }
+
+    public static void err(String content){
+        log(content, "ERROR");
+    }
+
+    public static void warn(String content){
+        log(content, "WARNING");
+    }
+
+    public static void log(String content, String level){
+        try(FileWriter fw = new FileWriter(logPath, true);
+            BufferedWriter bw = new BufferedWriter(fw)){
+            SimpleDateFormat formatter= new SimpleDateFormat("yy-MM-dd HH:mm:ss");
+            Date date = new Date(System.currentTimeMillis());
+            bw.write(String.format("%s(%s) %s\n", level==null ? "" : "["+level+"]",
+                    formatter.format(date), content));
+        } catch (Throwable t){
+            t.printStackTrace();
+        }
+    }
+
+    public static void logStackTrace(Throwable throwable){
+        try(FileOutputStream fos = new FileOutputStream(logPath, true);
+            PrintStream ps = new PrintStream(fos)){
+            throwable.printStackTrace(ps);
+        } catch (Throwable t){
+            t.printStackTrace();
+        }
     }
 }

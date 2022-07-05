@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import static org.objectweb.asm.Opcodes.*;
-import static org.yicheng.ouyang.test.cov.CoverageTransformer.ASM_VERSION;
+import static org.yicheng.ouyang.test.cov.CoverageTransformer.*;
 
 /**
  * @author Yicheng Ouyang
@@ -55,8 +55,8 @@ public class CoverageClassVisitor extends ClassVisitor{
                 }
             }
         } catch (Exception e) {
-            CoverageCollector.err("[ERROR] ClassLoader can not get resource: " + superSlashName + ".class");
-            CoverageCollector.logStackTrace(e);
+            err("[ERROR] ClassLoader can not get resource: " + superSlashName + ".class");
+            logStackTrace(e);
             e.printStackTrace();
         }
         super.visit(version, access, name, signature, originalSuperName, interfaces);
@@ -65,7 +65,7 @@ public class CoverageClassVisitor extends ClassVisitor{
     @Override
     public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
         MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
-//        CoverageCollector.log("Visiting method " + slashClassName + "#" + name, null);
+//        log("Visiting method " + slashClassName + "#" + name, null);
         return new CoverageMethodVisitor(mv, slashClassName, name, isJUnit3TestClass, this.classVersion);
     }
 
@@ -126,7 +126,7 @@ class CoverageMethodVisitor extends MethodVisitor {
     public void visitCode() {
         super.visitCode();
         this.isTestMethod = (this.isJUnit3TestClass && this.methodName.startsWith("test")) || hasTestAnnotation;
-//        CoverageCollector.log(String.format("%s is test method? %s", slashClassName+"#"+methodName, isTestMethod?"yes":"no"), null);
+//        log(String.format("%s is test method? %s", slashClassName+"#"+methodName, isTestMethod?"yes":"no"), null);
         if (isTestMethod){
             super.visitLdcInsn(this.slashClassName);
             super.visitLdcInsn(this.methodName);
@@ -229,7 +229,7 @@ class CoverageMethodVisitor extends MethodVisitor {
             super.visitTryCatchBlock(tryStart, tryEndCatchStart, tryEndCatchStart, "java/lang/Throwable");
             super.visitLabel(tryEndCatchStart);
             // if the class is compiled with Java 6 or higher, stack map frames are required
-//            CoverageCollector.log(String.format("Class version of %s: %d", slashClassName, classVersion), null);
+//            log(String.format("Class version of %s: %d", slashClassName, classVersion), null);
             if (this.classVersion >= 50){
                 super.visitFrame(F_FULL, 0, null, 1, new Object[]{"java/lang/Throwable"});
             }

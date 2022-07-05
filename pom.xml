@@ -53,8 +53,8 @@
                                     <shadedPattern>org.yicheng.test.cov.asm</shadedPattern>
                                 </relocation>
                                 <relocation>
-                                    <pattern>com.google.guava</pattern>
-                                    <shadedPattern>org.yicheng.test.cov.guava</shadedPattern>
+                                    <pattern>com.google</pattern>
+                                    <shadedPattern>org.yicheng.test.cov.google</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>
