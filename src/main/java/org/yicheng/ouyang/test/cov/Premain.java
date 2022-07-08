@@ -34,9 +34,6 @@ public class Premain {
             String value = kv[1];
             if (key.equals("d4jPid")){
                 CoverageTransformer.setPrefixWhiteList(value);
-            } else if (key.equals("instPrefix")){
-                // value expected to be slash class name prefix with "," as delimiter
-                CoverageTransformer.setInstClassPrefix(value);
             } else if (key.equals("debug")){
                 if (value.equals("true") || value.equals("True")){
                     CoverageTransformer.setDebugMode();

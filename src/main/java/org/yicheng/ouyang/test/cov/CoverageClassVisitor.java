@@ -56,6 +56,7 @@ public class CoverageClassVisitor extends ClassVisitor{
                     superSlashName = parentCr.getSuperName();
                 }
             }
+//            log(String.format("%s is Junit 3 test class? %s", slashClassName, isJUnit3TestClass?"true":"false"));
         } catch (Exception e) {
             err("[ERROR] ClassLoader can not get resource: " + superSlashName + ".class");
             logStackTrace(e, logPath);

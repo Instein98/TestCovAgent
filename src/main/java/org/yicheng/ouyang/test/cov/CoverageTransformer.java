@@ -1,6 +1,5 @@
 package org.yicheng.ouyang.test.cov;
 
-import com.google.common.collect.Sets;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -19,6 +18,7 @@ import java.nio.file.Paths;
 import java.security.ProtectionDomain;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Set;
 
 import static org.objectweb.asm.Opcodes.ASM9;
@@ -36,56 +36,56 @@ public class CoverageTransformer implements ClassFileTransformer {
     public static String logPath = "./test-cov.log";
     private static String verifyLogPath = "./class-verify.log";
 
+    private static Set<String> PREFIX_BLACK_LIST = new HashSet<>();
+    private static Set<String> PREFIX_WHITE_LIST = new HashSet<>();
+
     static {
         new File(logPath).delete();
         new File(verifyLogPath).delete();
+        PREFIX_BLACK_LIST.add("org/yicheng/ouyang/test/cov");
+        PREFIX_BLACK_LIST.add("org/springframework");
+        PREFIX_BLACK_LIST.add("com/fasterxml");
+        PREFIX_BLACK_LIST.add("java");
+        PREFIX_BLACK_LIST.add("jdk");
+        PREFIX_BLACK_LIST.add("sun");
+        PREFIX_BLACK_LIST.add("com/sun");
+        PREFIX_BLACK_LIST.add("org/apache/catalina");
+        PREFIX_BLACK_LIST.add("org/apache");
+        PREFIX_BLACK_LIST.add("org/hibernate/validator");
+        PREFIX_BLACK_LIST.add("javax");
     }
-
-    Set<String> PREFIX_BLACK_LIST = Sets.newHashSet(
-            "org/yicheng/ouyang/test/cov",
-            "org/springframework",
-            "com/fasterxml",
-            "java",
-            "jdk",
-            "sun",
-            "com/sun",
-            "org/apache/catalina",
-            "org/apache",
-            "org/hibernate/validator",
-            "javax"
-    );
-
-    private static Set<String> PREFIX_WHITE_LIST;
 
     public static void setPrefixWhiteList(String d4jProjPid){
         if (d4jProjPid.equals("Chart")){
-            PREFIX_WHITE_LIST = Sets.newHashSet("org/jfree");
+            PREFIX_WHITE_LIST.add("org/jfree");
         } else if (d4jProjPid.equals("Lang")) {
-            PREFIX_WHITE_LIST = Sets.newHashSet("org/apache/commons/lang");
+            PREFIX_WHITE_LIST.add("org/apache/commons/lang");
         } else if (d4jProjPid.equals("Time")) {
-            PREFIX_WHITE_LIST = Sets.newHashSet("org/joda/");
+            PREFIX_WHITE_LIST.add("org/joda/");
         } else if (d4jProjPid.equals("Math")) {
-            PREFIX_WHITE_LIST = Sets.newHashSet("org/apache/commons/math");
+            PREFIX_WHITE_LIST.add("org/apache/commons/math");
         } else if (d4jProjPid.equals("Mockito")){
-            PREFIX_WHITE_LIST = Sets.newHashSet("org/mockito", "org/concurrentmockito");
+            PREFIX_WHITE_LIST.add("org/mockito");
+            PREFIX_WHITE_LIST.add("org/concurrentmockito");
         } else if (d4jProjPid.equals("Closure")){
-            PREFIX_WHITE_LIST = Sets.newHashSet("com/google");
+            PREFIX_WHITE_LIST.add("com/google");
         } else {
-            PREFIX_WHITE_LIST = Sets.newHashSet(
-                    "org/jfree",  // Chart
-                    "org/apache/commons/lang",  // Lang
-                    "org/joda/",  // Time
-                    "org/mockito",
-                    "org/concurrentmockito",  // Mockito
-                    "com/google"  // Closure
-            );
+            PREFIX_WHITE_LIST.add("org/jfree");  // Chart
+            PREFIX_WHITE_LIST.add("org/apache/commons/lang");  // Lang
+            PREFIX_WHITE_LIST.add("org/joda/");  // Time
+            PREFIX_WHITE_LIST.add("org/mockito");
+            PREFIX_WHITE_LIST.add("org/concurrentmockito");  // Mockito
+            PREFIX_WHITE_LIST.add("com/google");  // Closure
         }
     }
 
-    public static void setInstClassPrefix(String prefixList){
-        String[] tmp = prefixList.trim().split(",");
-        PREFIX_WHITE_LIST = Sets.newHashSet(tmp);
-    }
+//    public static void setInstClassPrefix(String prefixList){
+//        String[] tmp = prefixList.trim().split(",");
+//        PREFIX_WHITE_LIST.clear();
+//        for (String prefix: tmp){
+//            PREFIX_WHITE_LIST.add(prefix);
+//        }
+//    }
 
     public static void setDebugMode(){
         debug = true;
@@ -105,6 +105,10 @@ public class CoverageTransformer implements ClassFileTransformer {
             return result;
         }
 
+//        log("PREFIX_WHITE_LIST.size(): " + PREFIX_WHITE_LIST.size());
+//        for (String prefix: PREFIX_WHITE_LIST){
+//            log("   " + prefix);
+//        }
         if (PREFIX_WHITE_LIST == null){
             for (String prefix: PREFIX_BLACK_LIST){
                 if (slashClassName.startsWith(prefix)){
@@ -185,6 +189,10 @@ public class CoverageTransformer implements ClassFileTransformer {
 
     public static void warn(String content){
         log(content, "WARNING");
+    }
+
+    public static void log(String content){
+        log(content, null);
     }
 
     public static void log(String content, String level){

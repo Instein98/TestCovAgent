@@ -52,10 +52,6 @@
                                     <pattern>org.objectweb.asm</pattern>
                                     <shadedPattern>org.yicheng.test.cov.asm</shadedPattern>
                                 </relocation>
-                                <relocation>
-                                    <pattern>com.google</pattern>
-                                    <shadedPattern>org.yicheng.test.cov.google</shadedPattern>
-                                </relocation>
                             </relocations>
                         </configuration>
                     </execution>
@@ -73,11 +69,6 @@
     </build>
 
     <dependencies>
-        <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <version>31.1-jre</version>
-        </dependency>
         <dependency>
             <groupId>org.ow2.asm</groupId>
             <artifactId>asm</artifactId>
