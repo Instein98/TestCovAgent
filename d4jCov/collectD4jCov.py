@@ -1,9 +1,9 @@
-from genericpath import isfile
 import os
 import time
 import shutil
 import subprocess as sp
 from datetime import datetime
+import traceback
 
 d4jHome = '/home/yicheng/research/apr/experiments/defects4j/'
 covAgentProjPath = os.path.abspath('..')
@@ -119,6 +119,8 @@ def checkResultValid(pid: str, bid: str):
     if not strInFile("testStart:", covLogPath):
         warn("Invalid cov result of {}-{}: No testStart event is captured!".format(pid, bid))
         return False
+        
+    return True
 
 def cleanUpInvalidResults():
     for pid in os.listdir(coverageOutputDir):
@@ -218,7 +220,7 @@ def collectCov(projPath: str, pid: str, bid: str):
     # if os.path.isfile(d4jTestLogPath):
     #     os.remove(d4jTestLogPath)
     # create a subprocess once get a chance
-    process = sp.Popen("rm test-cov.log; _JAVA_OPTIONS='-Xbootclasspath/a:{0} -javaagent:{0}=d4jPid={1};patchAnt=true' time defects4j test > {2} 2>&1; cp coverage.txt test-cov.log failing_tests expected_failing_tests all_tests {3}".format(javaagentJarPath, pid, d4jTestLogPath, os.path.join(coverageOutputDir, pid, bid)), shell=True, cwd=projPath)
+    process = sp.Popen("_JAVA_OPTIONS='-Xbootclasspath/a:{0} -javaagent:{0}=d4jPid={1};patchAnt=true' time defects4j test > {2} 2>&1".format(javaagentJarPath, pid, d4jTestLogPath), shell=True, cwd=projPath)
     log('Starting coverage collection for {}-{}'.format(pid, bid))
     processPool.append((process, pid, bid))
     return True
@@ -229,6 +231,17 @@ def handleProcess(process, idx: int, process_pid: str, process_bid: str):
     if exitCode is None:
         return False  # returning False means process is not finished
     else:
+        outputDir = os.path.join(coverageOutputDir, process_pid, process_bid)
+        projDir = os.path.join(d4jProjPath, process_pid, process_bid)
+        try:
+            shutil.copy(os.path.join(projDir, 'coverage.txt'), outputDir)
+            shutil.copy(os.path.join(projDir, 'test-cov.log'), outputDir)
+            shutil.copy(os.path.join(projDir, 'failing_tests'), outputDir)
+            shutil.copy(os.path.join(projDir, 'expected_failing_tests'), outputDir)
+            shutil.copy(os.path.join(projDir, 'all_tests'), outputDir)
+        except:
+            traceback.print_exc()
+
         log('Finished coverage collection for {}-{}, exitCode: {}'.format(process_pid, process_bid, exitCode))
         del processPool[idx]
 
