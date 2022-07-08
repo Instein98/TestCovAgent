@@ -1,9 +1,11 @@
 package org.yicheng.ouyang.test.cov;
 
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -85,6 +87,11 @@ public class CoverageCollector {
     }
 
     private static void outputCoverage(){
+        try{
+            Files.deleteIfExists(new File(outputPath).toPath());
+        } catch (Throwable t){
+            logStackTrace(t);
+        }
         try(FileWriter fw = new FileWriter(outputPath, true);
             BufferedWriter bw = new BufferedWriter(fw)){
             // print the ids and the covered code elements (statements)
@@ -100,7 +107,7 @@ public class CoverageCollector {
                 bw.write("\n");
             }
         } catch (Throwable t){
-            t.printStackTrace();
+            logStackTrace(t);
         }
     }
 
