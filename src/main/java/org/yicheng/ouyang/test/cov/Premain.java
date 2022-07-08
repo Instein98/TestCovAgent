@@ -1,17 +1,8 @@
 package org.yicheng.ouyang.test.cov;
 
-import sun.tools.jar.resources.jar;
-
-import java.io.File;
-import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.net.JarURLConnection;
 import java.net.URL;
-import java.nio.file.Paths;
-import java.security.CodeSource;
-import java.util.concurrent.TimeUnit;
-
-import static org.yicheng.ouyang.test.cov.CoverageTransformer.log;
 
 /**
  * @author Yicheng Ouyang
@@ -32,11 +23,6 @@ public class Premain {
 
         parseArgs(options);
         ins.addTransformer(new CoverageTransformer());
-//        log("Premain: " + System.getProperty("sun.boot.class.path"), null);
-    }
-
-    public static void test(){
-        File f = new File("xxx");
     }
 
     public static void parseArgs(String args){

@@ -56,7 +56,7 @@ public class CoverageClassVisitor extends ClassVisitor{
             }
         } catch (Exception e) {
             err("[ERROR] ClassLoader can not get resource: " + superSlashName + ".class");
-            logStackTrace(e);
+            logStackTrace(e, logPath);
             e.printStackTrace();
         }
         super.visit(version, access, name, signature, originalSuperName, interfaces);
@@ -86,13 +86,11 @@ class CoverageMethodVisitor extends MethodVisitor {
 
     private String slashClassName;
     private String methodName;
-    private int currentLine;
+    private int lineNumber = -1;
     private boolean isJUnit3TestClass;
     private boolean hasTestAnnotation;
     private boolean isTestMethod;
     private int classVersion;
-
-    private boolean isRightAfterLabel;
 
     // insert a try catch block for the whole test method to capture the exception thrown
     private Label tryStart;
@@ -106,12 +104,16 @@ class CoverageMethodVisitor extends MethodVisitor {
         this.classVersion = classVersion;
     }
 
-    private void instrumentReportCoverageInvocation() {
+    private boolean instrumentReportCoverageInvocation() {
+        if (lineNumber < 0)
+            return false;
+        lineNumber = -1;
         super.visitLdcInsn(slashClassName);
         super.visitLdcInsn(methodName);
-        super.visitLdcInsn(currentLine);
+        super.visitLdcInsn(lineNumber);
         super.visitMethodInsn(INVOKESTATIC, "org/yicheng/ouyang/test/cov/CoverageCollector",
                 "reportCoverage", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+        return true;
     }
 
     @Override
@@ -139,7 +141,7 @@ class CoverageMethodVisitor extends MethodVisitor {
 
     @Override
     public void visitInsn(int opcode) {
-//        instrumentReportCoverageInvocation();
+        instrumentReportCoverageInvocation();
         // reporting the test end event when return normally (add big try-catch block to handle exception throwing)
         if (isTestMethod && opcode >= IRETURN && opcode <= RETURN){
             super.visitLdcInsn(this.slashClassName);
@@ -152,73 +154,73 @@ class CoverageMethodVisitor extends MethodVisitor {
 
     @Override
     public void visitIntInsn(int opcode, int operand) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitIntInsn(opcode, operand);
     }
 
     @Override
     public void visitVarInsn(int opcode, int varIndex) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitVarInsn(opcode, varIndex);
     }
 
     @Override
     public void visitTypeInsn(int opcode, String type) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitTypeInsn(opcode, type);
     }
 
     @Override
     public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitFieldInsn(opcode, owner, name, descriptor);
     }
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
     }
 
     @Override
     public void visitInvokeDynamicInsn(String name, String descriptor, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitInvokeDynamicInsn(name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments);
     }
 
     @Override
     public void visitJumpInsn(int opcode, Label label) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitJumpInsn(opcode, label);
     }
 
     @Override
     public void visitLdcInsn(Object value) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitLdcInsn(value);
     }
 
     @Override
     public void visitIincInsn(int varIndex, int increment) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitIincInsn(varIndex, increment);
     }
 
     @Override
     public void visitTableSwitchInsn(int min, int max, Label dflt, Label... labels) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitTableSwitchInsn(min, max, dflt, labels);
     }
 
     @Override
     public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitLookupSwitchInsn(dflt, keys, labels);
     }
 
     @Override
     public void visitMultiANewArrayInsn(String descriptor, int numDimensions) {
-        if (isRightAfterLabel) instrumentReportCoverageInvocation(); isRightAfterLabel = false;
+        instrumentReportCoverageInvocation();
         super.visitMultiANewArrayInsn(descriptor, numDimensions);
     }
 
@@ -252,8 +254,6 @@ class CoverageMethodVisitor extends MethodVisitor {
     @Override
     public void visitLineNumber(int line, Label start) {
         super.visitLineNumber(line, start);
-        currentLine = line;
-        isRightAfterLabel = true;
-//        instrumentReportCoverageInvocation();
+        lineNumber = line;
     }
 }

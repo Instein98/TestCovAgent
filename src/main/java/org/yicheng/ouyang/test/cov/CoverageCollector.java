@@ -80,7 +80,7 @@ public class CoverageCollector {
     }
 
     public static void testEnd(String testClassName, String testMethodName){
-        log("testEnd: " + currentTestMethodId, null);
+//        log("testEnd: " + currentTestMethodId, null);
         currentTestMethodId = null;
     }
 

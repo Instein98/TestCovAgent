@@ -4,12 +4,14 @@ import com.google.common.collect.Sets;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.util.CheckClassAdapter;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.nio.file.Files;
@@ -31,7 +33,13 @@ public class CoverageTransformer implements ClassFileTransformer {
     public static int ASM_VERSION = ASM9;
     private static boolean debug = false;
     private static boolean patchAnt = false;
-    private static String logPath = "./test-cov.log";
+    public static String logPath = "./test-cov.log";
+    private static String verifyLogPath = "./class-verify.log";
+
+    static {
+        new File(logPath).delete();
+        new File(verifyLogPath).delete();
+    }
 
     Set<String> PREFIX_BLACK_LIST = Sets.newHashSet(
             "org/yicheng/ouyang/test/cov",
@@ -92,7 +100,7 @@ public class CoverageTransformer implements ClassFileTransformer {
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
         byte[] result = classfileBuffer;
 //        if (slashClassName.startsWith("org/yicheng/ouyang"))
-            log(String.format("%s is loaded by %s", slashClassName, loader.getClass().getName()), null);
+//            log(String.format("%s is loaded by %s", slashClassName, loader.getClass().getName()), null);
         if (slashClassName == null){
             return result;
         }
@@ -129,9 +137,21 @@ public class CoverageTransformer implements ClassFileTransformer {
             }
             cr.accept(cv, 0);
             result = cw.toByteArray();
-            if (debug) write(slashClassName + ".class", result);
+            if (debug) {
+                write(slashClassName + ".class", result);
+//                try{
+//                    CheckClassAdapter.verify(
+//                            new ClassReader(result),
+//                            loader,
+//                            false,
+//                            new PrintWriter(new FileOutputStream(verifyLogPath, true))
+//                    );
+//                } catch (Throwable t){
+//                    logStackTrace(t, verifyLogPath);
+//                }
+            }
         } catch (Throwable t){
-            logStackTrace(t);
+            logStackTrace(t, logPath);
             t.printStackTrace();
         }
         return result;
@@ -179,8 +199,8 @@ public class CoverageTransformer implements ClassFileTransformer {
         }
     }
 
-    public static void logStackTrace(Throwable throwable){
-        try(FileOutputStream fos = new FileOutputStream(logPath, true);
+    public static void logStackTrace(Throwable throwable, String path){
+        try(FileOutputStream fos = new FileOutputStream(path, true);
             PrintStream ps = new PrintStream(fos)){
             throwable.printStackTrace(ps);
         } catch (Throwable t){
