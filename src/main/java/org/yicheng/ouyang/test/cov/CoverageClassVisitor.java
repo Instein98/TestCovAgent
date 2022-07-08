@@ -10,6 +10,8 @@ import org.objectweb.asm.MethodVisitor;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.objectweb.asm.Opcodes.*;
 import static org.yicheng.ouyang.test.cov.CoverageTransformer.*;
@@ -92,6 +94,10 @@ class CoverageMethodVisitor extends MethodVisitor {
     private boolean isTestMethod;
     private int classVersion;
 
+    private Label lastLabel;
+    // See https://stackoverflow.com/a/72901516/11495796
+    private Map<Label, Label> translateForUninitialized = new HashMap<>();
+
     // insert a try catch block for the whole test method to capture the exception thrown
     private Label tryStart;
     private Label tryEndCatchStart;
@@ -139,6 +145,40 @@ class CoverageMethodVisitor extends MethodVisitor {
         }
     }
 
+    private Object[] replaceLabels(int num, Object[] array) {
+        Object[] result = array;
+        for(int ix = 0; ix < num; ix++) {
+            Label repl = translateForUninitialized.get(result[ix]);
+            if(repl == null) continue;
+            if(result == array) result = array.clone();
+            result[ix] = repl;
+        }
+        return result;
+    }
+
+    @Override
+    public void visitFrame(int type, int numLocal, Object[] local, int numStack, Object[] stack) {
+        switch(type) {
+            case F_NEW:
+            case F_FULL:
+                local = replaceLabels(numLocal, local);
+                stack = replaceLabels(numStack, stack);
+                break;
+            case F_APPEND:
+                local = replaceLabels(numLocal, local);
+                break;
+            case F_CHOP:
+            case F_SAME:
+                break;
+            case F_SAME1:
+                stack = replaceLabels(1, stack);
+                break;
+            default:
+                throw new AssertionError();
+        }
+        super.visitFrame(type, numLocal, local, numStack, stack);
+    }
+
     @Override
     public void visitInsn(int opcode) {
         instrumentReportCoverageInvocation();
@@ -166,7 +206,14 @@ class CoverageMethodVisitor extends MethodVisitor {
 
     @Override
     public void visitTypeInsn(int opcode, String type) {
-        instrumentReportCoverageInvocation();
+        if (instrumentReportCoverageInvocation() && opcode == NEW){
+            if (lastLabel != null){
+                Label newLabel = new Label();
+                super.visitLabel(newLabel);
+                // used to replace the original label with the new label for the stack map frames later
+                translateForUninitialized.put(lastLabel, newLabel);
+            }
+        }
         super.visitTypeInsn(opcode, type);
     }
 
@@ -255,5 +302,11 @@ class CoverageMethodVisitor extends MethodVisitor {
     public void visitLineNumber(int line, Label start) {
         super.visitLineNumber(line, start);
         lineNumber = line;
+    }
+
+    @Override
+    public void visitLabel(Label label) {
+        lastLabel = label;
+        super.visitLabel(label);
     }
 }
