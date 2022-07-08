@@ -1,3 +1,4 @@
+from genericpath import isfile
 import os
 import time
 import shutil
@@ -11,11 +12,18 @@ coverageOutputDir = os.path.abspath('covResult/')
 javaagentJarPath = '/home/yicheng/research/apr/testCovAgent/target/test-cov-1.0-SNAPSHOT.jar'
 
 processPool = []  # store (process, pid, bid)
-maxProcessNum = 32
+maxProcessNum = 8
 
 # print(os.path.abspath('..'))
 
 # sp.run("mvn clean package", shell=True, check=True, cwd=covAgentProjPath)
+
+def strInFile(string: str, path: str):
+    with open(path) as file:
+        for line in file:
+            if string in line:
+                return True
+    return False
 
 def getSetOfExpectedFailingTest(pid, bid):
     process = sp.Popen('defects4j info -p {} -b {}'.format(pid, bid),
@@ -100,7 +108,17 @@ def checkResultValid(pid: str, bid: str):
         if ',' not in cov.read():
             warn("Invalid cov result of {}-{}: coverage.txt has no ','".format(pid, bid))
             return False
+    
+    # defects4j test process should not be killed
+    d4jLogPath = os.path.join(coverageOutputDir, pid, bid, "d4jTest.log")
+    if strInFile("Killed", d4jLogPath):
+        warn("Invalid cov result of {}-{}: defects4j test process is 'Killed'!".format(pid, bid))
+        return False
 
+    covLogPath = os.path.join(coverageOutputDir, pid, bid, "test-cov.log")
+    if not strInFile("testStart:", covLogPath):
+        warn("Invalid cov result of {}-{}: No testStart event is captured!".format(pid, bid))
+        return False
 
 def cleanUpInvalidResults():
     for pid in os.listdir(coverageOutputDir):
@@ -147,6 +165,99 @@ def cleanUpInvalidResults():
                     print("Remove result of {}-{}: coverage.txt has no ','".format(pid, bid))
                     shutil.rmtree(bidPath)
                     continue
+            
+            # defects4j test process should not be killed
+            d4jLogPath = os.path.join(coverageOutputDir, pid, bid, "d4jTest.log")
+            if strInFile("Killed", d4jLogPath):
+                print("Invalid cov result of {}-{}: defects4j test process is 'Killed'!".format(pid, bid))
+                shutil.rmtree(bidPath)
+                continue
+
+            covLogPath = os.path.join(coverageOutputDir, pid, bid, "test-cov.log")
+            if not strInFile("testStart:", covLogPath):
+                print("Invalid cov result of {}-{}: No testStart event is captured!".format(pid, bid))
+                shutil.rmtree(bidPath)
+                continue
+
+def collectCov(projPath: str, pid: str, bid: str):
+    # if not os.path.isfile(os.path.join(projPath, 'failing_tests')):
+    #     warn("failing_tests file not found in {}-{}".format(pid, bid))
+    #     warn('skipping coverage collection for {}-{} due to failing_tests file not found'.format(pid, bid))
+    #     return False
+    
+    if os.path.isfile(os.path.join(coverageOutputDir, pid, bid, "coverage.txt")):
+        log("Cov file of {}-{} already exists, skipping...".format(pid, bid))
+        return False
+
+    outputDirPath = os.path.join(coverageOutputDir, pid, bid)
+    if os.path.isdir(outputDirPath): 
+        shutil.rmtree(outputDirPath)
+    os.makedirs(outputDirPath, exist_ok=True)
+    # # check failing tests before the coverage collection
+    # succeed = checkFailingTests(projPath, pid, bid)
+    # if not succeed:
+    #     warn('skipping coverage collection for {}-{} due to mismatched failing tests'.format(pid, bid))
+    #     continue
+
+    # start coverage collection
+
+    # poll if the process pool is full
+    counter = 0
+    while (len(processPool) >= maxProcessNum):
+        time.sleep(1)
+        idx = counter % len(processPool)
+        process, process_pid, process_bid = processPool[idx]
+        processFinished = handleProcess(process, idx, process_pid, process_bid)
+        # if the process is finished, the process at idx will be replaced by another process, so counter does not need to change
+        if processFinished:
+            continue
+        else:
+            counter += 1
+    
+    d4jTestLogPath = os.path.join(coverageOutputDir, pid, bid, 'd4jTest.log')
+    # if os.path.isfile(d4jTestLogPath):
+    #     os.remove(d4jTestLogPath)
+    # create a subprocess once get a chance
+    process = sp.Popen("rm test-cov.log; _JAVA_OPTIONS='-Xbootclasspath/a:{0} -javaagent:{0}=d4jPid={1};patchAnt=true' time defects4j test > {2} 2>&1; cp coverage.txt test-cov.log failing_tests expected_failing_tests all_tests {3}".format(javaagentJarPath, pid, d4jTestLogPath, os.path.join(coverageOutputDir, pid, bid)), shell=True, cwd=projPath)
+    log('Starting coverage collection for {}-{}'.format(pid, bid))
+    processPool.append((process, pid, bid))
+    return True
+
+
+def handleProcess(process, idx: int, process_pid: str, process_bid: str):
+    exitCode = process.poll()
+    if exitCode is None:
+        return False  # returning False means process is not finished
+    else:
+        log('Finished coverage collection for {}-{}, exitCode: {}'.format(process_pid, process_bid, exitCode))
+        del processPool[idx]
+
+        generatedCovFile = os.path.join(coverageOutputDir, process_pid, process_bid, 'coverage.txt')
+        if exitCode != 0:
+            warn('d4j test with coverage FAIL for {}-{}'.format(process_pid, process_bid))
+            if os.path.isfile(generatedCovFile):
+                os.remove(generatedCovFile)
+            return True  # returning True means process is finished and the output file is checked and handled.
+        else:
+            # check the failing tests again, it will warn if not consistent
+            succeed = checkResultValid(process_pid, process_bid)
+            if not succeed and os.path.isfile(generatedCovFile):
+                os.remove(generatedCovFile)
+            return True  # returning True means process is finished and the output file is checked and handled.
+
+
+def waitProcessPoolFinish():
+    counter = 0
+    while (len(processPool) > 0):
+        time.sleep(1)
+        idx = counter % len(processPool)
+        process, process_pid, process_bid = processPool[idx]
+        processFinished = handleProcess(process, idx, process_pid, process_bid)
+        # if the process is finished, the process at idx will be replaced by another process, so counter does not need to change
+        if processFinished:
+            continue
+        else:
+            counter += 1
 
 
 def main():
@@ -158,56 +269,13 @@ def main():
             projPath = os.path.join(pidPath, bid)
             if not os.path.isdir(projPath):
                 continue
-            if not os.path.isfile(os.path.join(projPath, 'failing_tests')):
-                warn("failing_tests file not found in {}-{}".format(pid, bid))
-                warn('skipping coverage collection for {}-{} due to failing_tests file not found'.format(pid, bid))
-                continue
-            os.makedirs(os.path.join(coverageOutputDir, pid, bid), exist_ok=True)
-            
-            if os.path.isfile(os.path.join(coverageOutputDir, pid, bid, "coverage.txt")):
-                log("Cov file of {}-{} already exists, skipping...".format(pid, bid))
-                continue
-
-            # # check failing tests before the coverage collection
-            # succeed = checkFailingTests(projPath, pid, bid)
-            # if not succeed:
-            #     warn('skipping coverage collection for {}-{} due to mismatched failing tests'.format(pid, bid))
-            #     continue
-
-            # start coverage collection
-
-            # poll if the process pool is full
-            counter = 0
-            while (len(processPool) >= maxProcessNum):
-                time.sleep(2)
-                idx = counter % len(processPool)
-                process, process_pid, process_bid = processPool[idx]
-                exitCode = process.poll()
-                if exitCode is None:
-                    counter += 1
-                    continue
-                else:
-                    log('Finished coverage collection for {}-{}'.format(process_pid, process_bid))
-                    del processPool[idx]
-
-                    generatedCovFile = os.path.join(coverageOutputDir, process_pid, process_bid, 'coverage.txt')
-                    if exitCode != 0:
-                        warn('d4j test with coverage FAIL for {}-{}'.format(process_pid, process_bid))
-                        if os.path.isfile(generatedCovFile):
-                            os.remove(generatedCovFile)
-                    else:
-                        # check the failing tests again, it will warn if not consistent
-                        succeed = checkResultValid(process_pid, process_bid)
-                        if not succeed and os.path.isfile(generatedCovFile):
-                            os.remove(generatedCovFile)
-                        continue  # counter should not change
-            
-            # create a subprocess once get a chance
-            process = sp.Popen("rm test-cov.log; _JAVA_OPTIONS='-Xbootclasspath/a:{0} -javaagent:{0}=d4jPid={1};patchAnt=true' time defects4j test > {2} 2>&1; cp coverage.txt test-cov.log failing_tests expected_failing_tests all_tests {3}".format(javaagentJarPath, pid, os.path.join(coverageOutputDir, pid, bid, 'd4jTest.log'), os.path.join(coverageOutputDir, pid, bid)), shell=True, cwd=projPath)
-            log('Starting coverage collection for {}-{}'.format(pid, bid))
-            processPool.append((process, pid, bid))
+            collectCov(projPath, pid, bid)
+    waitProcessPoolFinish()
+   
 
 if __name__ == '__main__':
+    cleanUpInvalidResults()
     main()
-    # cleanUpInvalidResults()
+    # collectCov('/home/yicheng/research/apr/d4jProj/Math/78', 'Math', '78')
+    # waitProcessPoolFinish()
         
