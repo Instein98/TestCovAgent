@@ -114,12 +114,12 @@ class CoverageMethodVisitor extends MethodVisitor {
     private boolean instrumentReportCoverageInvocation() {
         if (lineNumber < 0)
             return false;
-        lineNumber = -1;
         super.visitLdcInsn(slashClassName);
         super.visitLdcInsn(methodName);
         super.visitLdcInsn(lineNumber);
         super.visitMethodInsn(INVOKESTATIC, "org/yicheng/ouyang/test/cov/CoverageCollector",
                 "reportCoverage", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+        lineNumber = -1;
         return true;
     }
 
