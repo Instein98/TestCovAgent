@@ -12,7 +12,7 @@ coverageOutputDir = os.path.abspath('covResult/')
 javaagentJarPath = '/home/yicheng/research/apr/testCovAgent/target/test-cov-1.0-SNAPSHOT.jar'
 
 processPool = []  # store (process, pid, bid)
-maxProcessNum = 8
+maxProcessNum = 16
 
 # print(os.path.abspath('..'))
 
@@ -104,10 +104,15 @@ def checkResultValid(pid: str, bid: str):
     if not os.path.isfile(covFile):
         warn("Invalid cov result of {}-{}: coverage.txt not found".format(pid, bid))
         return False
-    with open(covFile, 'r') as cov:
-        if ',' not in cov.read():
-            warn("Invalid cov result of {}-{}: coverage.txt has no ','".format(pid, bid))
-            return False
+    if not strInFile(",", covFile):
+        warn("Invalid cov result of {}-{}: coverage.txt has no ','".format(pid, bid))
+        return False
+    if strInFile(":-1", covFile):
+        warn("Invalid cov result of {}-{}: coverage.txt has ':-1'".format(pid, bid))
+        return False
+    if isCovFileRepeatedlyAppend(covFile):
+        warn("Invalid cov result of {}-{}: coverage.txt has multiple '1 -> ' lines".format(pid, bid))
+        return False
     
     # defects4j test process should not be killed
     d4jLogPath = os.path.join(coverageOutputDir, pid, bid, "d4jTest.log")
@@ -131,55 +136,18 @@ def cleanUpInvalidResults():
             bidPath = os.path.join(pidPath, bid)
             if not os.path.isdir(bidPath):
                 continue
+            if not checkResultValid(pid, bid):
+                print("Removing result of {}-{}.".format(pid, bid))
+                shutil.rmtree(bidPath)
 
-            # actual failing tests should be consistent with the expected failing tests
-            actualFail = os.path.join(d4jProjPath, pid, bid, 'failing_tests')
-            expectedFail = os.path.join(d4jProjPath, pid, bid, 'expected_failing_tests')
-            if not os.path.isfile(actualFail) or not os.path.isfile(expectedFail):
-                print("Remove result of {}-{}: actual or expected failing test file not found".format(pid, bid))
-                shutil.rmtree(bidPath)
-                continue
-            else:
-                shutil.copy(actualFail, bidPath)
-                shutil.copy(expectedFail, bidPath)
-            actualSet = set()
-            with open(actualFail, 'r') as actual:
-                for line in actual:
-                    if line.startswith('--- '):
-                        actualSet.add(line.strip()[4:])
-            expectedSet = set()
-            with open(expectedFail, 'r') as expected:
-                for line in expected:
-                    expectedSet.add(line.strip())
-            if actualSet != expectedSet:
-                print("Remove result of {}-{}: actual_failing != expected_failing".format(pid, bid))
-                shutil.rmtree(bidPath)
-                continue
 
-            # coverage file should exist and contain valid coverage information
-            covFile = os.path.join(bidPath, "coverage.txt")
-            if not os.path.isfile(covFile):
-                print("Remove result of {}-{}: coverage.txt not found".format(pid, bid))
-                shutil.rmtree(bidPath)
-                continue
-            with open(covFile, 'r') as cov:
-                if ',' not in cov.read():
-                    print("Remove result of {}-{}: coverage.txt has no ','".format(pid, bid))
-                    shutil.rmtree(bidPath)
-                    continue
-            
-            # defects4j test process should not be killed
-            d4jLogPath = os.path.join(coverageOutputDir, pid, bid, "d4jTest.log")
-            if strInFile("Killed", d4jLogPath):
-                print("Invalid cov result of {}-{}: defects4j test process is 'Killed'!".format(pid, bid))
-                shutil.rmtree(bidPath)
-                continue
+def isCovFileRepeatedlyAppend(covFile: str):
+    res = sp.check_output('grep "^1 \->" {} | wc -l'.format(covFile), shell=True, universal_newlines=True)
+    num = int(res.strip())
+    if num == 1:
+        return False  # it is not repeatedly appended
+    return True  # it is repeatedly appended
 
-            covLogPath = os.path.join(coverageOutputDir, pid, bid, "test-cov.log")
-            if not strInFile("testStart:", covLogPath):
-                print("Invalid cov result of {}-{}: No testStart event is captured!".format(pid, bid))
-                shutil.rmtree(bidPath)
-                continue
 
 def collectCov(projPath: str, pid: str, bid: str):
     # if not os.path.isfile(os.path.join(projPath, 'failing_tests')):
@@ -274,7 +242,8 @@ def waitProcessPoolFinish():
 
 
 def main():
-    for pid in os.listdir(d4jProjPath):
+    # for pid in os.listdir(d4jProjPath):
+    for pid in [ 'Chart', 'Mockito', 'Time', 'Lang', 'Math', 'Closure' ]:
         pidPath = os.path.join(d4jProjPath, pid)
         if not os.path.isdir(pidPath):
             continue
