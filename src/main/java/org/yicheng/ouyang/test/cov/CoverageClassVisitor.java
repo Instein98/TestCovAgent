@@ -6,6 +6,7 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Type;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -26,6 +27,7 @@ public class CoverageClassVisitor extends ClassVisitor{
     private String slashClassName;
     private ClassLoader loader;
     private boolean isJUnit3TestClass;
+    private boolean isParameterizedTestClass;
     private int classVersion;
 
     CoverageClassVisitor(ClassVisitor classVisitor, String className, ClassLoader loader, int classVersion) {
@@ -65,11 +67,21 @@ public class CoverageClassVisitor extends ClassVisitor{
         super.visit(version, access, name, signature, originalSuperName, interfaces);
     }
 
+//    @Override
+//    public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
+//        if (visible && descriptor.equals("Lorg/junit/runner/RunWith;")){
+//            AnnotationVisitor av = super.visitAnnotation(descriptor, visible);
+//            return new CoverageAnnotationVisitor(av);
+//        } else {
+//            return super.visitAnnotation(descriptor, visible);
+//        }
+//    }
+
     @Override
     public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
         MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
 //        log("Visiting method " + slashClassName + "#" + name, null);
-        return new CoverageMethodVisitor(mv, slashClassName, name, isJUnit3TestClass, this.classVersion);
+        return new CoverageMethodVisitor(mv, slashClassName, name, descriptor, isJUnit3TestClass, isParameterizedTestClass, this.classVersion);
     }
 
     private byte[] loadByteCode(InputStream inStream) throws IOException {
@@ -83,15 +95,31 @@ public class CoverageClassVisitor extends ClassVisitor{
         return outStream.toByteArray();
     }
 
+//    class CoverageAnnotationVisitor extends AnnotationVisitor{
+//        protected CoverageAnnotationVisitor(AnnotationVisitor annotationVisitor) {
+//            super(ASM_VERSION, annotationVisitor);
+//        }
+//        @Override
+//        public void visit(String name, Object value) {
+//            super.visit(name, value);
+//            if (name.equals("value") && Type.getType("Lorg/junit/runners/Parameterized;").equals(value)){
+//                isParameterizedTestClass = true;
+//            }
+//        }
+//    }
 }
 
 class CoverageMethodVisitor extends MethodVisitor {
 
     private String slashClassName;
     private String methodName;
+    private String methodDesc;
     private int lineNumber = -1;
     private boolean isJUnit3TestClass;
     private boolean hasTestAnnotation;
+    private boolean isParameterizedTestClass;
+    private boolean hasPrameterizedTestAnnotation;
+    private boolean hasNoParameters;
     private boolean isTestMethod;
     private int classVersion;
 
@@ -103,11 +131,15 @@ class CoverageMethodVisitor extends MethodVisitor {
     private Label tryStart;
     private Label tryEndCatchStart;
 
-    protected CoverageMethodVisitor(MethodVisitor methodVisitor, String className, String methodName, boolean isJUnit3TestClass, int classVersion) {
+    protected CoverageMethodVisitor(MethodVisitor methodVisitor, String className, String methodName,
+                                    String desc, boolean isJUnit3TestClass, boolean isParameterizedTestClass, int classVersion) {
         super(ASM_VERSION, methodVisitor);
         this.slashClassName = className;
         this.methodName = methodName;
+        this.methodDesc = desc;
         this.isJUnit3TestClass = isJUnit3TestClass;
+        this.isParameterizedTestClass = isParameterizedTestClass;
+        this.hasNoParameters = desc.contains("()");
         this.classVersion = classVersion;
     }
 
@@ -127,6 +159,8 @@ class CoverageMethodVisitor extends MethodVisitor {
     public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
         if (descriptor.equals("Lorg/junit/Test;") || descriptor.equals("Lorg/junit/jupiter/api/Test;")){
             this.hasTestAnnotation = true;
+        } else if (descriptor.equals("Lorg/junit/jupiter/params/ParameterizedTest;")){
+            this.hasPrameterizedTestAnnotation = true;
         }
         return super.visitAnnotation(descriptor, visible);
     }
@@ -134,7 +168,9 @@ class CoverageMethodVisitor extends MethodVisitor {
     @Override
     public void visitCode() {
         super.visitCode();
-        this.isTestMethod = (this.isJUnit3TestClass && this.methodName.startsWith("test")) || hasTestAnnotation;
+        this.isTestMethod = (isJUnit3TestClass && methodName.startsWith("test") && hasNoParameters)
+                || hasTestAnnotation
+                || hasPrameterizedTestAnnotation;
 //        log(String.format("%s is test method? %s", slashClassName+"#"+methodName, isTestMethod?"yes":"no"), null);
         if (isTestMethod){
             super.visitLdcInsn(this.slashClassName);
