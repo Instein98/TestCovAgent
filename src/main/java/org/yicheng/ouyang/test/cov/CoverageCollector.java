@@ -45,62 +45,68 @@ public class CoverageCollector {
         }
     }
 
-    public static synchronized void reportCoverage(String className, String methodName, int lineNum){
-        // record coverage only during test execution
-        if (currentTestMethodId != null){
-            String line = className + ":" + methodName + ":" + lineNum;
-            int lineId;
-            if (! lineToIdMap.containsKey(line)){
-                lineId = nextLineId++;
-                lineToIdMap.put(line, lineId);
-                idToLineMap.put(lineId, line);
-            } else {
-                lineId = lineToIdMap.get(line);
-            }
+    public static void reportCoverage(String className, String methodName, int lineNum){
+        synchronized (covMap) {
+            // record coverage only during test execution
+            if (currentTestMethodId != null){
+                String line = className + ":" + methodName + ":" + lineNum;
+                int lineId;
+                if (! lineToIdMap.containsKey(line)){
+                    lineId = nextLineId++;
+                    lineToIdMap.put(line, lineId);
+                    idToLineMap.put(lineId, line);
+                } else {
+                    lineId = lineToIdMap.get(line);
+                }
 
-            Set<Integer> coveredLineIds;
-            if (! covMap.containsKey(currentTestMethodId)){
-                coveredLineIds = new HashSet<>();
-                covMap.put(currentTestMethodId, coveredLineIds);
-            } else {
-                coveredLineIds = covMap.get(currentTestMethodId);
+                Set<Integer> coveredLineIds;
+                if (! covMap.containsKey(currentTestMethodId)){
+                    coveredLineIds = new HashSet<>();
+                    covMap.put(currentTestMethodId, coveredLineIds);
+                } else {
+                    coveredLineIds = covMap.get(currentTestMethodId);
+                }
+                coveredLineIds.add(lineId);
             }
-            coveredLineIds.add(lineId);
         }
     }
 
     public static void testStart(String testClassName, String testMethodName){
-        String startingTest = testClassName + "#" + testMethodName;
-        // for nested tests, only the coverage of the outer test will be recorded
-        if (currentTestMethodId != null){
-            warn(String.format("Test %s seems to invoke another test %s", currentTestMethodId, startingTest));
-            return;
-        } else {
-            log("testStart: " + startingTest, null);
-            currentTestMethodId = startingTest;
-            if (covMap.containsKey(currentTestMethodId)) {
-                warn(currentTestMethodId + " is invoked more than once! Coverage of different execution will be collected separately.");
-                int idx = 1;
-                while (covMap.containsKey(String.format("%s[%d]", startingTest, idx))){
-                    idx++;
+        synchronized (covMap) {
+            String startingTest = testClassName + "#" + testMethodName;
+            // for nested tests, only the coverage of the outer test will be recorded
+            if (currentTestMethodId != null) {
+                warn(String.format("Test %s seems to invoke another test %s", currentTestMethodId, startingTest));
+                return;
+            } else {
+                log("testStart: " + startingTest, null);
+                currentTestMethodId = startingTest;
+                if (covMap.containsKey(currentTestMethodId)) {
+                    warn(currentTestMethodId + " is invoked more than once! Coverage of different execution will be collected separately.");
+                    int idx = 1;
+                    while (covMap.containsKey(String.format("%s[%d]", startingTest, idx))) {
+                        idx++;
+                    }
+                    currentTestMethodId = String.format("%s[%d]", startingTest, idx);
                 }
-                currentTestMethodId = String.format("%s[%d]", startingTest, idx);
             }
         }
     }
 
     public static void testEnd(String testClassName, String testMethodName){
+        synchronized (covMap) {
 //        log("testEnd: " + currentTestMethodId, null);
-        String endingTest = testClassName + "#" + testMethodName;
-        if (currentTestMethodId.equals(endingTest)){
-            currentTestMethodId = null;
-        } else if (currentTestMethodId.contains("[") && currentTestMethodId.startsWith(endingTest)){
-            String startingTest = currentTestMethodId.substring(0, currentTestMethodId.indexOf('['));
-            if (startingTest.equals(endingTest)){
+            String endingTest = testClassName + "#" + testMethodName;
+            if (currentTestMethodId.equals(endingTest)) {
                 currentTestMethodId = null;
+            } else if (currentTestMethodId.contains("[") && currentTestMethodId.startsWith(endingTest)) {
+                String startingTest = currentTestMethodId.substring(0, currentTestMethodId.indexOf('['));
+                if (startingTest.equals(endingTest)) {
+                    currentTestMethodId = null;
+                }
+            } else {
+                warn(String.format("Test %s's inner test %s ends", currentTestMethodId, endingTest));
             }
-        } else {
-            warn(String.format("Test %s's inner test %s ends", currentTestMethodId, endingTest));
         }
     }
 
