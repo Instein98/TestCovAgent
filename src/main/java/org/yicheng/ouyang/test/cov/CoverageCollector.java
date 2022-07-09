@@ -38,6 +38,11 @@ public class CoverageCollector {
         Thread hook = new Thread(CoverageCollector::outputCoverage);
         Runtime.getRuntime().addShutdownHook(hook);
 //        log("CoverageCollector: " + System.getProperty("sun.boot.class.path"), null);
+        try{
+            Files.deleteIfExists(new File(outputPath).toPath());
+        } catch (Throwable t){
+            logStackTrace(t);
+        }
     }
 
     public static synchronized void reportCoverage(String className, String methodName, int lineNum){
@@ -66,32 +71,40 @@ public class CoverageCollector {
 
     public static void testStart(String testClassName, String testMethodName){
         String startingTest = testClassName + "#" + testMethodName;
+        // for nested tests, only the coverage of the outer test will be recorded
         if (currentTestMethodId != null){
-            warn(String.format("Test %s has not end when test %s starts! Its coverage collection is forced to end.", currentTestMethodId, startingTest));
-        }
-        log("testStart: " + startingTest, null);
-        currentTestMethodId = startingTest;
-        if (covMap.containsKey(currentTestMethodId)) {
-            warn(currentTestMethodId + " is invoked more than once! Coverage of different execution will be collected separately.");
-            int idx = 1;
-            while (covMap.containsKey(String.format("%s[%d]", startingTest, idx))){
-                idx++;
+            warn(String.format("Test %s seems to invoke another test %s", currentTestMethodId, startingTest));
+            return;
+        } else {
+            log("testStart: " + startingTest, null);
+            currentTestMethodId = startingTest;
+            if (covMap.containsKey(currentTestMethodId)) {
+                warn(currentTestMethodId + " is invoked more than once! Coverage of different execution will be collected separately.");
+                int idx = 1;
+                while (covMap.containsKey(String.format("%s[%d]", startingTest, idx))){
+                    idx++;
+                }
+                currentTestMethodId = String.format("%s[%d]", startingTest, idx);
             }
-            currentTestMethodId = String.format("%s[%d]", startingTest, idx);
         }
     }
 
     public static void testEnd(String testClassName, String testMethodName){
 //        log("testEnd: " + currentTestMethodId, null);
-        currentTestMethodId = null;
+        String endingTest = testClassName + "#" + testMethodName;
+        if (currentTestMethodId.equals(endingTest)){
+            currentTestMethodId = null;
+        } else if (currentTestMethodId.contains("[") && currentTestMethodId.startsWith(endingTest)){
+            String startingTest = currentTestMethodId.substring(0, currentTestMethodId.indexOf('['));
+            if (startingTest.equals(endingTest)){
+                currentTestMethodId = null;
+            }
+        } else {
+            warn(String.format("Test %s's inner test %s ends", currentTestMethodId, endingTest));
+        }
     }
 
     private static void outputCoverage(){
-        try{
-            Files.deleteIfExists(new File(outputPath).toPath());
-        } catch (Throwable t){
-            logStackTrace(t);
-        }
         try(FileWriter fw = new FileWriter(outputPath, true);
             BufferedWriter bw = new BufferedWriter(fw)){
             // print the ids and the covered code elements (statements)
