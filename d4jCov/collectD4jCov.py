@@ -124,6 +124,9 @@ def checkResultValid(pid: str, bid: str):
     if not strInFile("testStart:", covLogPath):
         warn("Invalid cov result of {}-{}: No testStart event is captured!".format(pid, bid))
         return False
+    if strInFile("has not end when test", covLogPath):
+        warn("Invalid cov result of {}-{}: Wrongly handle the nested tests (used the old javaagent)".format(pid, bid))
+        return False
         
     return True
 
