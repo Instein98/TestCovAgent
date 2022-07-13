@@ -38,10 +38,20 @@ public class Premain {
                 if (value.equals("true") || value.equals("True")){
                     CoverageTransformer.setDebugMode();
                 }
-            } else if (key.equals("patchAnt")){
-                if (value.equals("true") || value.equals("True")){
-                    CoverageTransformer.setPatchAnt();
-                }
+            }
+            else if (key.equals("patchAnt")){
+                CoverageTransformer.setPatchAnt(value.equals("false") ? false : true);
+            }
+            // defects4j mode will use the testStart/testEnd signal of defects4j, default set to false
+            // https://github.com/rjust/defects4j/blob/master/framework/lib/formatter/src/edu/washington/cs/mut/testrunner/Formatter.java#L139
+            else if (key.equals("d4jMode")){
+                CoverageTransformer.setD4jMode(value.equals("true") ? true : false);
+            }
+            // If a statement crosses multiple lines, record all of them or only record the first line number?
+            // If true, will record all the continuous line numbers between two visited line numbers.
+            // Default set to true.
+            else if (key.equals("contCov")){
+                CoverageTransformer.setContCov(value.equals("false") ? false : true);
             }
         }
     }

@@ -30,11 +30,15 @@ public class CoverageClassVisitor extends ClassVisitor{
     private boolean isParameterizedTestClass;
     private int classVersion;
 
-    CoverageClassVisitor(ClassVisitor classVisitor, String className, ClassLoader loader, int classVersion) {
+    private Map<String, Map<Integer, Integer>> methodLineNumMap;
+
+    CoverageClassVisitor(ClassVisitor classVisitor, String className, ClassLoader loader,
+                         int classVersion, Map<String, Map<Integer, Integer>> methodLineNumMap) {
         super(ASM_VERSION, classVisitor);
         this.slashClassName = className;
         this.loader = loader;
         this.classVersion = classVersion;
+        this.methodLineNumMap = methodLineNumMap;
     }
 
     @Override
@@ -81,7 +85,9 @@ public class CoverageClassVisitor extends ClassVisitor{
     public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
         MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
 //        log("Visiting method " + slashClassName + "#" + name, null);
-        return new CoverageMethodVisitor(mv, slashClassName, name, descriptor, isJUnit3TestClass, isParameterizedTestClass, this.classVersion);
+        return new CoverageMethodVisitor(mv, slashClassName, name, descriptor, isJUnit3TestClass,
+                isParameterizedTestClass, this.classVersion,
+                this.methodLineNumMap == null ? null : this.methodLineNumMap.get(name+"#"+descriptor));
     }
 
     private byte[] loadByteCode(InputStream inStream) throws IOException {
@@ -122,6 +128,7 @@ class CoverageMethodVisitor extends MethodVisitor {
     private boolean hasNoParameters;
     private boolean isTestMethod;
     private int classVersion;
+    private Map<Integer, Integer> lineNumMap;
 
     private Label lastLabel;
     // See https://stackoverflow.com/a/72901516/11495796
@@ -132,7 +139,8 @@ class CoverageMethodVisitor extends MethodVisitor {
     private Label tryEndCatchStart;
 
     protected CoverageMethodVisitor(MethodVisitor methodVisitor, String className, String methodName,
-                                    String desc, boolean isJUnit3TestClass, boolean isParameterizedTestClass, int classVersion) {
+                                    String desc, boolean isJUnit3TestClass, boolean isParameterizedTestClass,
+                                    int classVersion, Map<Integer, Integer> lineNumMap) {
         super(ASM_VERSION, methodVisitor);
         this.slashClassName = className;
         this.methodName = methodName;
@@ -141,16 +149,26 @@ class CoverageMethodVisitor extends MethodVisitor {
         this.isParameterizedTestClass = isParameterizedTestClass;
         this.hasNoParameters = desc.contains("()");
         this.classVersion = classVersion;
+        this.lineNumMap = lineNumMap;
     }
 
     private boolean instrumentReportCoverageInvocation() {
         if (lineNumber < 0)
             return false;
-        super.visitLdcInsn(slashClassName);
-        super.visitLdcInsn(methodName);
-        super.visitLdcInsn(lineNumber);
-        super.visitMethodInsn(INVOKESTATIC, "org/yicheng/ouyang/test/cov/CoverageCollector",
-                "reportCoverage", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+        if (this.lineNumMap != null && this.lineNumMap.containsKey(lineNumber)){
+            super.visitLdcInsn(slashClassName);
+            super.visitLdcInsn(methodName);
+            super.visitLdcInsn(lineNumber);
+            super.visitLdcInsn(this.lineNumMap.get(lineNumber));
+            super.visitMethodInsn(INVOKESTATIC, "org/yicheng/ouyang/test/cov/CoverageCollector",
+                    "reportCoverageRange", "(Ljava/lang/String;Ljava/lang/String;II)V", false);
+        } else {
+            super.visitLdcInsn(slashClassName);
+            super.visitLdcInsn(methodName);
+            super.visitLdcInsn(lineNumber);
+            super.visitMethodInsn(INVOKESTATIC, "org/yicheng/ouyang/test/cov/CoverageCollector",
+                    "reportCoverage", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+        }
         lineNumber = -1;
         return true;
     }
@@ -327,7 +345,7 @@ class CoverageMethodVisitor extends MethodVisitor {
             // rethrow the caught exception
             mv.visitInsn(ATHROW);
         }
-        super.visitMaxs(maxStack+3, maxLocals);
+        super.visitMaxs(maxStack+4, maxLocals);
     }
 
     /**

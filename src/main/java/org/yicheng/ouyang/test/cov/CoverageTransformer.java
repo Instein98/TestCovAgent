@@ -3,6 +3,10 @@ package org.yicheng.ouyang.test.cov;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.util.CheckClassAdapter;
 
 import java.io.BufferedWriter;
@@ -18,7 +22,9 @@ import java.nio.file.Paths;
 import java.security.ProtectionDomain;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.objectweb.asm.Opcodes.ASM9;
@@ -32,7 +38,9 @@ public class CoverageTransformer implements ClassFileTransformer {
 
     public static int ASM_VERSION = ASM9;
     private static boolean debug = false;
-    private static boolean patchAnt = false;
+    private static boolean patchAnt = true;
+    private static boolean d4jMode = false;
+    private static boolean contCov = true;
     public static String logPath = "./test-cov.log";
     private static String verifyLogPath = "./class-verify.log";
 
@@ -91,8 +99,16 @@ public class CoverageTransformer implements ClassFileTransformer {
         debug = true;
     }
 
-    public static void setPatchAnt(){
-        patchAnt = true;
+    public static void setD4jMode(boolean value){
+        d4jMode = value;
+    }
+
+    public static void setPatchAnt(boolean value){
+        patchAnt = value;
+    }
+
+    public static void setContCov(boolean value){
+        contCov = value;
     }
 
     @Override
@@ -134,8 +150,32 @@ public class CoverageTransformer implements ClassFileTransformer {
             // Start instrumentation
 //            log("Instrumenting " + slashClassName, null);
             ClassReader cr = new ClassReader(classfileBuffer);
+
+            Map<String, Map<Integer, Integer>> methodLineNumMap = null;
+            if (contCov){
+                ClassNode cn = new ClassNode();
+                cr.accept(cn, 0);
+                methodLineNumMap = new HashMap<>();
+                for (MethodNode mn: cn.methods){
+                    // the key is a line number, the value is the next line number, they form a range.
+                    Map<Integer, Integer> nextLineNumMap = new HashMap<>();
+                    int lastLineNum = -1;
+                    for (AbstractInsnNode node: mn.instructions){
+                        if (node instanceof LineNumberNode){
+                            LineNumberNode lineNode = (LineNumberNode) node;
+                            int lineNum = lineNode.line;
+                            if (lastLineNum > 0){
+                                nextLineNumMap.put(lastLineNum, lineNum);
+                            }
+                            lastLineNum = lineNum;
+                        }
+                    }
+                    methodLineNumMap.put(mn.name + "#" + mn.desc, nextLineNumMap);
+                }
+            }
+
             ClassWriter cw = new ClassWriter(cr, 0);  // use no COMPUTE_FRAME or COMPUTE_MAX
-            ClassVisitor cv = new CoverageClassVisitor(cw, slashClassName, loader, getClassVersion(cr));
+            ClassVisitor cv = new CoverageClassVisitor(cw, slashClassName, loader, getClassVersion(cr), methodLineNumMap);
             if (patchAnt && slashClassName.equals("org/apache/tools/ant/taskdefs/ExecuteJava")){
                 cv = new AntPatchClassVisitor(cv);
             }

@@ -45,6 +45,12 @@ public class CoverageCollector {
         }
     }
 
+    public static void reportCoverageRange(String className, String methodName, int start, int end){
+        for (int i = start; i < end; i++){
+            reportCoverage(className, methodName, i);
+        }
+    }
+
     public static void reportCoverage(String className, String methodName, int lineNum){
         synchronized (covMap) {
             // record coverage only during test execution
