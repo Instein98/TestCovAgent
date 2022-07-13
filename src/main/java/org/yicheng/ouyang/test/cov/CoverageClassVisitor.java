@@ -30,43 +30,47 @@ public class CoverageClassVisitor extends ClassVisitor{
     private boolean isParameterizedTestClass;
     private int classVersion;
 
+    private boolean d4jMode;
     private Map<String, Map<Integer, Integer>> methodLineNumMap;
 
     CoverageClassVisitor(ClassVisitor classVisitor, String className, ClassLoader loader,
-                         int classVersion, Map<String, Map<Integer, Integer>> methodLineNumMap) {
+                         int classVersion, Map<String, Map<Integer, Integer>> methodLineNumMap, boolean d4jMode) {
         super(ASM_VERSION, classVisitor);
         this.slashClassName = className;
         this.loader = loader;
         this.classVersion = classVersion;
         this.methodLineNumMap = methodLineNumMap;
+        this.d4jMode = d4jMode;
     }
 
     @Override
     public void visit(int version, int access, String name, String signature, String superSlashName, String[] interfaces) {
         String originalSuperName = superSlashName;
-        // check if this class is a subclass of TestCase.class
-        try{
-            while (superSlashName != null){
-                if (superSlashName.equals("junit/framework/TestCase")){
-                    this.isJUnit3TestClass = true;
-                    break;
-                }else{
-                    InputStream is;
-                    if (this.loader != null){
-                        is = this.loader.getResourceAsStream(superSlashName + ".class");
-                    } else {
-                        is = ClassLoader.getSystemResourceAsStream(superSlashName + ".class");
+        if (!d4jMode){
+            // check if this class is a subclass of TestCase.class
+            try{
+                while (superSlashName != null){
+                    if (superSlashName.equals("junit/framework/TestCase")){
+                        this.isJUnit3TestClass = true;
+                        break;
+                    }else{
+                        InputStream is;
+                        if (this.loader != null){
+                            is = this.loader.getResourceAsStream(superSlashName + ".class");
+                        } else {
+                            is = ClassLoader.getSystemResourceAsStream(superSlashName + ".class");
+                        }
+                        byte[] superBytes = loadByteCode(is);
+                        ClassReader parentCr = new ClassReader(superBytes);
+                        superSlashName = parentCr.getSuperName();
                     }
-                    byte[] superBytes = loadByteCode(is);
-                    ClassReader parentCr = new ClassReader(superBytes);
-                    superSlashName = parentCr.getSuperName();
                 }
-            }
 //            log(String.format("%s is Junit 3 test class? %s", slashClassName, isJUnit3TestClass?"true":"false"));
-        } catch (Exception e) {
-            err("[ERROR] ClassLoader can not get resource: " + superSlashName + ".class");
-            logStackTrace(e, logPath);
-            e.printStackTrace();
+            } catch (Exception e) {
+                err("[ERROR] ClassLoader can not get resource: " + superSlashName + ".class");
+                logStackTrace(e, logPath);
+                e.printStackTrace();
+            }
         }
         super.visit(version, access, name, signature, originalSuperName, interfaces);
     }
@@ -87,7 +91,7 @@ public class CoverageClassVisitor extends ClassVisitor{
 //        log("Visiting method " + slashClassName + "#" + name, null);
         return new CoverageMethodVisitor(mv, slashClassName, name, descriptor, isJUnit3TestClass,
                 isParameterizedTestClass, this.classVersion,
-                this.methodLineNumMap == null ? null : this.methodLineNumMap.get(name+"#"+descriptor));
+                this.methodLineNumMap == null ? null : this.methodLineNumMap.get(name+"#"+descriptor), d4jMode);
     }
 
     private byte[] loadByteCode(InputStream inStream) throws IOException {
@@ -129,6 +133,7 @@ class CoverageMethodVisitor extends MethodVisitor {
     private boolean isTestMethod;
     private int classVersion;
     private Map<Integer, Integer> lineNumMap;
+    private boolean d4jMode;
 
     private Label lastLabel;
     // See https://stackoverflow.com/a/72901516/11495796
@@ -140,7 +145,7 @@ class CoverageMethodVisitor extends MethodVisitor {
 
     protected CoverageMethodVisitor(MethodVisitor methodVisitor, String className, String methodName,
                                     String desc, boolean isJUnit3TestClass, boolean isParameterizedTestClass,
-                                    int classVersion, Map<Integer, Integer> lineNumMap) {
+                                    int classVersion, Map<Integer, Integer> lineNumMap, boolean d4jMode) {
         super(ASM_VERSION, methodVisitor);
         this.slashClassName = className;
         this.methodName = methodName;
@@ -150,6 +155,7 @@ class CoverageMethodVisitor extends MethodVisitor {
         this.hasNoParameters = desc.contains("()");
         this.classVersion = classVersion;
         this.lineNumMap = lineNumMap;
+        this.d4jMode = d4jMode;
     }
 
     private boolean instrumentReportCoverageInvocation() {
@@ -186,9 +192,9 @@ class CoverageMethodVisitor extends MethodVisitor {
     @Override
     public void visitCode() {
         super.visitCode();
-        this.isTestMethod = (isJUnit3TestClass && methodName.startsWith("test") && hasNoParameters)
+        this.isTestMethod = !d4jMode && ((isJUnit3TestClass && methodName.startsWith("test") && hasNoParameters)
                 || hasTestAnnotation
-                || hasPrameterizedTestAnnotation;
+                || hasPrameterizedTestAnnotation);
 //        log(String.format("%s is test method? %s", slashClassName+"#"+methodName, isTestMethod?"yes":"no"), null);
         if (isTestMethod){
             super.visitLdcInsn(this.slashClassName);

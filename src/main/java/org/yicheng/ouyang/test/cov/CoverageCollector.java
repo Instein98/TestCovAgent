@@ -77,6 +77,22 @@ public class CoverageCollector {
         }
     }
 
+    public static void d4jStartTest(String testId){
+        int lbIdx = testId.indexOf('(');
+        int rbIdx = testId.indexOf(')');
+        String testMethodName = testId.substring(0, lbIdx);
+        String testClassName = testId.substring(lbIdx+1, rbIdx);
+        testStart(testClassName, testMethodName);
+    }
+
+    public static void d4jEndTest(String testId){
+        int lbIdx = testId.indexOf('(');
+        int rbIdx = testId.indexOf(')');
+        String testMethodName = testId.substring(0, lbIdx);
+        String testClassName = testId.substring(lbIdx+1, rbIdx);
+        testEnd(testClassName, testMethodName);
+    }
+
     public static void testStart(String testClassName, String testMethodName){
         synchronized (covMap) {
             String startingTest = testClassName + "#" + testMethodName;

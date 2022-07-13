@@ -133,6 +133,7 @@ public class CoverageTransformer implements ClassFileTransformer {
             }
         } else {
             if (patchAnt) PREFIX_WHITE_LIST.add("org/apache/tools/ant/taskdefs/ExecuteJava");
+            if (d4jMode) PREFIX_WHITE_LIST.add("edu/washington/cs/mut/testrunner/Formatter");
             boolean matched = false;
             for (String prefix: PREFIX_WHITE_LIST){
                 if (slashClassName.startsWith(prefix)){
@@ -175,9 +176,12 @@ public class CoverageTransformer implements ClassFileTransformer {
             }
 
             ClassWriter cw = new ClassWriter(cr, 0);  // use no COMPUTE_FRAME or COMPUTE_MAX
-            ClassVisitor cv = new CoverageClassVisitor(cw, slashClassName, loader, getClassVersion(cr), methodLineNumMap);
+            ClassVisitor cv = new CoverageClassVisitor(cw, slashClassName, loader, getClassVersion(cr), methodLineNumMap, d4jMode);
             if (patchAnt && slashClassName.equals("org/apache/tools/ant/taskdefs/ExecuteJava")){
                 cv = new AntPatchClassVisitor(cv);
+            }
+            if (d4jMode && slashClassName.equals("edu/washington/cs/mut/testrunner/Formatter")){
+                cv = new D4jFormatterClassVisitor(cv);
             }
             cr.accept(cv, 0);
             result = cw.toByteArray();
