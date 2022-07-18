@@ -21,9 +21,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.ProtectionDomain;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -158,30 +161,50 @@ public class CoverageTransformer implements ClassFileTransformer {
                 cr.accept(cn, 0);
                 methodLineNumMap = new HashMap<>();
                 for (MethodNode mn: cn.methods){
-                    // the key is a line number, the value is the next line number, they form a range.
-                    Map<Integer, Integer> nextLineNumMap = new HashMap<>();
-                    int lastLineNum = -1;
+                    Set<Integer> lines = new HashSet<>();
                     for (AbstractInsnNode node: mn.instructions){
                         if (node instanceof LineNumberNode){
                             LineNumberNode lineNode = (LineNumberNode) node;
                             int lineNum = lineNode.line;
-                            if (lastLineNum > 0){
-                                nextLineNumMap.put(lastLineNum, lineNum);
-                            }
-                            lastLineNum = lineNum;
+                            lines.add(lineNum);
                         }
+                    }
+                    List<Integer> sortedLineList = new ArrayList<>(lines);
+                    Collections.sort(sortedLineList);
+                    // the key is a line number, the value is the next line number, they form a range.
+                    Map<Integer, Integer> nextLineNumMap = new HashMap<>();
+                    int lastLineNum = -1;
+                    for (int line: sortedLineList){
+                        if (lastLineNum < 0){
+                            lastLineNum = line;
+                            continue;
+                        }
+                        nextLineNumMap.put(lastLineNum, line);
+                        lastLineNum = line;
                     }
                     methodLineNumMap.put(mn.name + "#" + mn.desc, nextLineNumMap);
                 }
             }
 
+            File f = new File("trace.log");FileWriter fw = null;BufferedWriter bw = null;
+            try{
+                 fw= new FileWriter(f);
+                 bw= new BufferedWriter(fw);
+                for (StackTraceElement element: Thread.currentThread().getStackTrace()){
+                    bw.write(element.toString() + "\n");
+                }
+                bw.close(); fw.close();
+            } catch (Throwable t){}
+
+
             ClassWriter cw = new ClassWriter(cr, 0);  // use no COMPUTE_FRAME or COMPUTE_MAX
-            ClassVisitor cv = new CoverageClassVisitor(cw, slashClassName, loader, getClassVersion(cr), methodLineNumMap, d4jMode);
+            ClassVisitor cv;
             if (patchAnt && slashClassName.equals("org/apache/tools/ant/taskdefs/ExecuteJava")){
-                cv = new AntPatchClassVisitor(cv);
-            }
-            if (d4jMode && slashClassName.equals("edu/washington/cs/mut/testrunner/Formatter")){
-                cv = new D4jFormatterClassVisitor(cv);
+                cv = new AntPatchClassVisitor(cw);
+            } else if (d4jMode && slashClassName.equals("edu/washington/cs/mut/testrunner/Formatter")){
+                cv = new D4jFormatterClassVisitor(cw);
+            } else {
+                cv = new CoverageClassVisitor(cw, slashClassName, loader, getClassVersion(cr), methodLineNumMap, d4jMode);
             }
             cr.accept(cv, 0);
             result = cw.toByteArray();
