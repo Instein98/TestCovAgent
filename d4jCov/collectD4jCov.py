@@ -5,11 +5,10 @@ import subprocess as sp
 from datetime import datetime
 import traceback
 
-d4jHome = '/home/yicheng/research/apr/experiments/defects4j/'
 covAgentProjPath = os.path.abspath('..')
 d4jProjPath = '/home/yicheng/research/apr/d4jProj/'
 coverageOutputDir = os.path.abspath('covResult/')
-javaagentJarPath = '/home/yicheng/research/apr/testCovAgent/target/test-cov-1.0-SNAPSHOT.jar'
+javaagentJarPath = os.path.join(covAgentProjPath, 'target', 'test-cov-1.0-SNAPSHOT.jar')
 
 processPool = []  # store (process, pid, bid)
 maxProcessNum = 16

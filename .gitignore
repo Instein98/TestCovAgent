@@ -1,4 +1,5 @@
 .DS_Store
 .idea
 target
+__pycache__
 dependency-reduced-pom.xml
