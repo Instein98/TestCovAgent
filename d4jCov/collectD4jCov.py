@@ -6,12 +6,12 @@ from datetime import datetime
 import traceback
 
 covAgentProjPath = os.path.abspath('..')
-d4jProjPath = '/home/yicheng/research/apr/d4jProj/'
+d4jProjPath = '/home/yicheng/apr/d4jProj/'
 coverageOutputDir = os.path.abspath('covResult/')
 javaagentJarPath = os.path.join(covAgentProjPath, 'target', 'test-cov-1.0-SNAPSHOT.jar')
 
 processPool = []  # store (process, pid, bid)
-maxProcessNum = 16
+maxProcessNum = 2
 
 # print(os.path.abspath('..'))
 
@@ -82,8 +82,18 @@ def checkResultValid(pid: str, bid: str):
      # actual failing tests should be consistent with the expected failing tests
     actualFail = os.path.join(coverageOutputDir, pid, bid, 'failing_tests')
     expectedFail = os.path.join(coverageOutputDir, pid, bid, 'expected_failing_tests')
-    if not os.path.isfile(actualFail) or not os.path.isfile(expectedFail):
-        warn("Invalid cov result of {}-{}: actual or expected failing test file not found".format(pid, bid))
+    if not os.path.isfile(expectedFail):
+        projExpectedFail = os.path.join(d4jProjPath, pid, bid, 'expected_failing_tests')
+        if os.path.isfile(projExpectedFail):
+            shutil.copy(projExpectedFail, expectedFail)
+        else:
+            setOfExpectedFailing = getSetOfExpectedFailingTest(pid, bid)
+            with open(projExpectedFail, 'w') as file:
+                for test in setOfExpectedFailing:
+                    file.write(test + "\n")
+            shutil.copy(projExpectedFail, expectedFail)
+    if not os.path.isfile(actualFail):
+        warn("Invalid cov result of {}-{}: actual failing test file not found".format(pid, bid))
         return False
     actualSet = set()
     with open(actualFail, 'r') as actual:
