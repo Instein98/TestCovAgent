@@ -164,8 +164,8 @@ def generateTbarCovPos(pid: str, bid: str):
     res = set()
     failedTestSet = getExpectedFailingTests(pid, bid)
 
-    # make some manual patches
-    failedTestSet = patchFailingTestSet(pid, bid, failedTestSet)
+    # # make some manual patches
+    # failedTestSet = patchFailingTestSet(pid, bid, failedTestSet)
 
     covLogPath = os.path.join(covResultDir, pid, bid, 'coverage.txt')
     if not os.path.exists(covLogPath):

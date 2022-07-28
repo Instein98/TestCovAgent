@@ -11,7 +11,7 @@ coverageOutputDir = os.path.abspath('covResult/')
 javaagentJarPath = os.path.join(covAgentProjPath, 'target', 'test-cov-1.0-SNAPSHOT.jar')
 
 processPool = []  # store (process, pid, bid)
-maxProcessNum = 2
+maxProcessNum = 12
 
 # print(os.path.abspath('..'))
 
@@ -140,6 +140,8 @@ def checkResultValid(pid: str, bid: str):
     return True
 
 def cleanUpInvalidResults():
+    if not os.path.isdir(coverageOutputDir):
+        return
     for pid in os.listdir(coverageOutputDir):
         pidPath = os.path.join(coverageOutputDir, pid)
         if not os.path.isdir(pidPath):
@@ -168,7 +170,7 @@ def collectCov(projPath: str, pid: str, bid: str):
     #     return False
     
     if os.path.isfile(os.path.join(coverageOutputDir, pid, bid, "coverage.txt")):
-        log("Cov file of {}-{} already exists, skipping...".format(pid, bid))
+        log("skipping {}-{}".format(pid, bid))
         return False
 
     outputDirPath = os.path.join(coverageOutputDir, pid, bid)
@@ -200,7 +202,7 @@ def collectCov(projPath: str, pid: str, bid: str):
     # if os.path.isfile(d4jTestLogPath):
     #     os.remove(d4jTestLogPath)
     # create a subprocess once get a chance
-    process = sp.Popen("_JAVA_OPTIONS='-Xbootclasspath/a:{0} -javaagent:{0}=d4jPid={1};patchAnt=true' time defects4j test > {2} 2>&1".format(javaagentJarPath, pid, d4jTestLogPath), shell=True, cwd=projPath)
+    process = sp.Popen("_JAVA_OPTIONS='-Xbootclasspath/a:{0} -javaagent:{0}=d4jPid={1};d4jMode=true' time defects4j test > {2} 2>&1".format(javaagentJarPath, pid, d4jTestLogPath), shell=True, cwd=projPath)
     log('Starting coverage collection for {}-{}'.format(pid, bid))
     processPool.append((process, pid, bid))
     return True
@@ -214,8 +216,8 @@ def handleProcess(process, idx: int, process_pid: str, process_bid: str):
         outputDir = os.path.join(coverageOutputDir, process_pid, process_bid)
         projDir = os.path.join(d4jProjPath, process_pid, process_bid)
         try:
-            shutil.copy(os.path.join(projDir, 'coverage.txt'), outputDir)
-            shutil.copy(os.path.join(projDir, 'test-cov.log'), outputDir)
+            shutil.move(os.path.join(projDir, 'coverage.txt'), os.path.join(outputDir, 'coverage.txt'))
+            shutil.move(os.path.join(projDir, 'test-cov.log'), os.path.join(outputDir, 'test-cov.log'))
             shutil.copy(os.path.join(projDir, 'failing_tests'), outputDir)
             shutil.copy(os.path.join(projDir, 'expected_failing_tests'), outputDir)
             shutil.copy(os.path.join(projDir, 'all_tests'), outputDir)
@@ -256,6 +258,7 @@ def waitProcessPoolFinish():
 def main():
     # for pid in os.listdir(d4jProjPath):
     for pid in [ 'Chart', 'Mockito', 'Time', 'Lang', 'Math', 'Closure' ]:
+    # for pid in [ 'Lang']:
         pidPath = os.path.join(d4jProjPath, pid)
         if not os.path.isdir(pidPath):
             continue
